@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voicemod V2 Clone</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>Voicemod V2 Clone</h1>
+      <p class="subtitle">Preset voice effects + soundboard mixed into a virtual mic stream.</p>
+
+      <section class="panel">
+        <button id="startButton">Enable Microphone</button>
+        <label for="presetSelect">Voice preset</label>
+        <select id="presetSelect" disabled>
+          <option value="clean">Clean</option>
+          <option value="radio">Radio</option>
+          <option value="demon">Demon</option>
+          <option value="robot">Robot</option>
+          <option value="cave">Cave</option>
+        </select>
+      </section>
+
+      <section class="panel">
+        <h2>Soundboard</h2>
+        <div class="soundboard">
+          <button data-sound="airhorn" disabled>Airhorn</button>
+          <button data-sound="beep" disabled>Beep Beep</button>
+          <button data-sound="applause" disabled>Applause</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Output</h2>
+        <p id="status">Status: waiting for microphone permission</p>
+        <p class="small">
+          The processed output stream is exposed as
+          <code>window.voicemodOutputStream</code>.
+        </p>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
