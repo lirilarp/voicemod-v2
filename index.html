@@ -3,38 +3,69 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Voicemod V2 Clone</title>
+    <title>Voicemod V2</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="app">
-      <h1>Voicemod V2 Clone</h1>
-      <p class="subtitle">Preset voice effects + soundboard mixed into a virtual mic stream.</p>
+    <header class="topbar">
+      <div>
+        <h1>Voicemod V2</h1>
+        <p class="subtitle">Real-time voice effects, soundboard, and virtual mic stream.</p>
+      </div>
+      <nav class="nav-links">
+        <a class="active" href="./index.html">Studio</a>
+        <a href="./download.html">Downloads</a>
+      </nav>
+    </header>
+
+    <main class="layout">
+      <section class="panel panel-hero">
+        <div class="row wrap">
+          <button id="startButton" class="primary">Enable Microphone</button>
+          <button id="stopAllButton" disabled>Stop all sounds</button>
+          <span id="appVersionLabel" class="badge">Version: loading…</span>
+          <span id="latestVersionLabel" class="badge muted">Latest: checking…</span>
+        </div>
+        <p id="status" class="status">Status: waiting for microphone permission</p>
+      </section>
+
+      <section id="updateBanner" class="panel panel-warning hidden" aria-live="polite">
+        <div class="row wrap space-between">
+          <p>
+            A newer version is available from the site.
+            <span id="updateVersionText"></span>
+          </p>
+          <button id="reloadNowButton" class="primary">Reload now</button>
+        </div>
+      </section>
 
       <section class="panel">
-        <button id="startButton">Enable Microphone</button>
-        <label for="presetSelect">Voice preset</label>
-        <select id="presetSelect" disabled>
-          <option value="clean">Clean</option>
-          <option value="radio">Radio</option>
-          <option value="demon">Demon</option>
-          <option value="robot">Robot</option>
-          <option value="cave">Cave</option>
-        </select>
+        <h2>Voice Preset</h2>
+        <div class="row wrap">
+          <label for="presetSelect" class="label-inline">Select preset</label>
+          <select id="presetSelect" disabled>
+            <option value="clean">Clean</option>
+            <option value="radio">Radio</option>
+            <option value="demon">Demon</option>
+            <option value="robot">Robot</option>
+            <option value="cave">Cave</option>
+          </select>
+        </div>
       </section>
 
       <section class="panel">
         <h2>Soundboard</h2>
-        <p class="small">Upload audio files for each sound button (mp3/wav/ogg).</p>
+        <p class="small">Upload custom sounds (mp3/wav/ogg) for each button. Hotkeys: 1, 2, 3.</p>
         <div class="uploads">
           <label>Airhorn file <input type="file" id="upload-airhorn" accept="audio/*" /></label>
           <label>Beep file <input type="file" id="upload-beep" accept="audio/*" /></label>
           <label>Applause file <input type="file" id="upload-applause" accept="audio/*" /></label>
         </div>
+        <div class="small" id="uploadSummary">Uploaded: none</div>
         <div class="soundboard">
-          <button data-sound="airhorn" disabled>Airhorn</button>
-          <button data-sound="beep" disabled>Beep Beep</button>
-          <button data-sound="applause" disabled>Applause</button>
+          <button data-sound="airhorn" disabled>Airhorn (1)</button>
+          <button data-sound="beep" disabled>Beep (2)</button>
+          <button data-sound="applause" disabled>Applause (3)</button>
         </div>
       </section>
 
@@ -49,15 +80,20 @@
 
           <label for="soundboardGain">Soundboard gain <span id="soundboardGainValue">80%</span></label>
           <input id="soundboardGain" type="range" min="0" max="150" value="80" />
+
+          <label class="toggle" for="autoUpdateEnabled">
+            <span>Auto-update from site</span>
+            <input id="autoUpdateEnabled" type="checkbox" checked />
+          </label>
+          <button id="checkUpdateButton">Check updates now</button>
         </div>
       </section>
 
       <section class="panel">
-        <h2>Output</h2>
-        <p id="status">Status: waiting for microphone permission</p>
+        <h2>Output Stream</h2>
         <p class="small">
-          The processed output stream is exposed as
-          <code>window.voicemodOutputStream</code>.
+          Processed stream:
+          <code>window.voicemodOutputStream</code>
         </p>
       </section>
     </main>

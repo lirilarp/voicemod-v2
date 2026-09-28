@@ -1,98 +1,73 @@
 # voicemod-v2
 
-Voicemod-style client + deploy-ready Cloudflare Worker server.
+Voicemod-style web studio + Cloudflare Worker backend.
 
-## Features
+## What’s included
 
-### Client
-- Preset voice changers (`Clean`, `Radio`, `Demon`, `Robot`, `Cave`)
-- Soundboard buttons with real audio uploads (`Airhorn`, `Beep Beep`, `Applause`)
-- Runtime settings (`Master gain`, `Monitor gain`, `Soundboard gain`) persisted in local storage
-- Mixed output stream exposed as `window.voicemodOutputStream`
+### Studio UI (`/index.html`)
+- Refreshed modern UI with improved layout and navigation
+- Real-time voice presets + soundboard
+- Upload custom sound files per soundboard slot
+- QoL controls:
+  - Stop all sounds button
+  - Keyboard hotkeys (`1`, `2`, `3` for sounds, `X` to stop)
+  - Live version badges
+- Auto-update support (toggleable) using site version metadata
 
-### Server (Cloudflare Worker)
-- Account APIs (register, login, current user)
-- Token-authenticated uploads API
-- User settings + user presets APIs
+### Download page (`/download.html`)
+- Reads generated build metadata from `downloads.json`
+- Shows latest build version and generated timestamp
+- Provides downloadable client/server artifact bundles
+
+### Cloudflare Worker server (`/worker`)
+- Account APIs (register/login/me)
+- Token-authenticated uploads
+- User settings + presets
 - Library summary endpoint
-- Uses Durable Objects storage and is configured in-repo (no extra service provisioning files required)
 
-## Prerequisites
-
-- Node.js 18+
-- Python 3 (for client dev server)
-- Cloudflare account (for Worker deploy)
-
-## Client Run (dev)
+## Local development
 
 ```bash
 cd /home/runner/work/voicemod-v2/voicemod-v2
 npm run dev
 ```
 
-Then open <http://localhost:8080>.
+Open: <http://localhost:8080>
 
-## Build
-
-Build both outputs:
+## Build pipeline (auto-generated from current source)
 
 ```bash
 cd /home/runner/work/voicemod-v2/voicemod-v2
 npm run build
 ```
 
-Artifacts:
-- Client static bundle: `/home/runner/work/voicemod-v2/voicemod-v2/dist`
+This runs:
+1. `build:client` → outputs `/dist`, generates `version.json`, `app-version.js`, `downloads.json`
+2. `build:server` → outputs `/dist-server`
+3. `build:release` → creates downloadable tarballs in `/dist/downloads` and refreshes `/dist/downloads.json`
+
+Build outputs:
+- Client: `/home/runner/work/voicemod-v2/voicemod-v2/dist`
 - Server source bundle: `/home/runner/work/voicemod-v2/voicemod-v2/dist-server`
+- Download artifacts: `/home/runner/work/voicemod-v2/voicemod-v2/dist/downloads`
 
-## Cloudflare Worker server
+## Auto-update behavior
 
-Server source lives in:
+The studio checks `/version.json` periodically.
 
-- `/home/runner/work/voicemod-v2/voicemod-v2/worker/src/index.js`
-- `/home/runner/work/voicemod-v2/voicemod-v2/worker/wrangler.toml`
+- If **Auto-update from site** is enabled, the app reloads automatically when a newer version is detected.
+- If disabled, an update banner appears and you can reload manually.
 
-### Deploy (no extra repo setup required)
+## Cloudflare Worker deploy
 
 ```bash
 cd /home/runner/work/voicemod-v2/voicemod-v2/worker
 npm run deploy
 ```
 
-Optional recommended secret (for stronger token signing):
+Optional recommended secret:
 
 ```bash
 cd /home/runner/work/voicemod-v2/voicemod-v2/worker
 npx wrangler secret put AUTH_SECRET
 ```
-
-### Local Worker dev
-
-```bash
-cd /home/runner/work/voicemod-v2/voicemod-v2/worker
-npm run dev
-```
-
-## Server API
-
-Base path: `/api`
-
-- `GET /health`
-- `POST /auth/register` body `{ "username": "...", "password": "..." }`
-- `POST /auth/login` body `{ "username": "...", "password": "..." }`
-- `GET /auth/me` (requires bearer authorization header)
-- `GET /uploads` (requires bearer authorization header)
-- `POST /uploads` multipart form-data with `file` and optional `slot` (requires bearer authorization header)
-- `GET /uploads/:uploadId` (requires bearer authorization header)
-- `DELETE /uploads/:uploadId` (requires bearer authorization header)
-- `GET /settings` (requires bearer authorization header)
-- `PUT /settings` body `{ "masterGain": number, "monitorGain": number, "soundboardGain": number }` (requires bearer authorization header)
-- `GET /presets` (requires bearer authorization header)
-- `PUT /presets` body `{ "presets": [...] }` (requires bearer authorization header)
-- `GET /library` (requires bearer authorization header)
-
-## Notes
-
-- Uploaded files are stored per-user in Worker Durable Object storage.
-- Upload limit is 10MB per file.
-- This remains a browser/client prototype for voice processing; OS-level virtual microphone drivers are not part of this repo.
