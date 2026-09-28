@@ -2,12 +2,46 @@ const startButton = document.getElementById('startButton');
 const presetSelect = document.getElementById('presetSelect');
 const soundButtons = Array.from(document.querySelectorAll('[data-sound]'));
 const statusLabel = document.getElementById('status');
+const uploadInputs = {
+  airhorn: document.getElementById('upload-airhorn'),
+  beep: document.getElementById('upload-beep'),
+  applause: document.getElementById('upload-applause'),
+};
+const settingsInputs = {
+  masterGain: document.getElementById('masterGain'),
+  monitorGain: document.getElementById('monitorGain'),
+  soundboardGain: document.getElementById('soundboardGain'),
+};
+const settingsValues = {
+  masterGain: document.getElementById('masterGainValue'),
+  monitorGain: document.getElementById('monitorGainValue'),
+  soundboardGain: document.getElementById('soundboardGainValue'),
+};
 
 let audioContext;
 let initialized = false;
 let soundboardBus;
 let virtualMicDestination;
 let nodes;
+let masterNode;
+let monitorNode;
+
+const settingsStorageKey = 'voicemod-v2-settings';
+const defaultSettings = {
+  masterGain: 0.9,
+  monitorGain: 0.12,
+  soundboardGain: 0.8,
+};
+
+const settings = {
+  ...defaultSettings,
+};
+
+const uploadedBuffers = {
+  airhorn: null,
+  beep: null,
+  applause: null,
+};
 
 const presets = {
   clean: { hp: 70, lp: 12000, p1Freq: 1400, p1Gain: 0, p2Freq: 3200, p2Gain: 0, distortion: 0, delayMix: 0, delayTime: 0.1, feedback: 0.1, tremoloRate: 0, tremoloDepth: 0 },
@@ -19,6 +53,62 @@ const presets = {
 
 function setStatus(message) {
   statusLabel.textContent = `Status: ${message}`;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function readStoredSettings() {
+  try {
+    const raw = localStorage.getItem(settingsStorageKey);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.masterGain === 'number') settings.masterGain = clamp(parsed.masterGain, 0, 1.5);
+    if (typeof parsed.monitorGain === 'number') settings.monitorGain = clamp(parsed.monitorGain, 0, 0.6);
+    if (typeof parsed.soundboardGain === 'number') settings.soundboardGain = clamp(parsed.soundboardGain, 0, 1.5);
+  } catch {
+    localStorage.removeItem(settingsStorageKey);
+  }
+}
+
+function writeSettings() {
+  localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+}
+
+function refreshSettingUI() {
+  settingsInputs.masterGain.value = String(Math.round(settings.masterGain * 100));
+  settingsInputs.monitorGain.value = String(Math.round(settings.monitorGain * 100));
+  settingsInputs.soundboardGain.value = String(Math.round(settings.soundboardGain * 100));
+
+  settingsValues.masterGain.textContent = `${Math.round(settings.masterGain * 100)}%`;
+  settingsValues.monitorGain.textContent = `${Math.round(settings.monitorGain * 100)}%`;
+  settingsValues.soundboardGain.textContent = `${Math.round(settings.soundboardGain * 100)}%`;
+}
+
+function applySettingsToGraph() {
+  if (masterNode) {
+    masterNode.gain.setTargetAtTime(settings.masterGain, audioContext.currentTime, 0.02);
+  }
+  if (monitorNode) {
+    monitorNode.gain.setTargetAtTime(settings.monitorGain, audioContext.currentTime, 0.02);
+  }
+  if (soundboardBus) {
+    soundboardBus.gain.setTargetAtTime(settings.soundboardGain, audioContext.currentTime, 0.02);
+  }
+}
+
+function updateSetting(key, rawValue) {
+  const asNumber = Number(rawValue);
+  if (Number.isNaN(asNumber)) return;
+
+  if (key === 'masterGain') settings.masterGain = clamp(asNumber / 100, 0, 1.5);
+  if (key === 'monitorGain') settings.monitorGain = clamp(asNumber / 100, 0, 0.6);
+  if (key === 'soundboardGain') settings.soundboardGain = clamp(asNumber / 100, 0, 1.5);
+
+  refreshSettingUI();
+  writeSettings();
+  if (initialized) applySettingsToGraph();
 }
 
 function makeDistortionCurve(amount) {
@@ -89,8 +179,7 @@ async function initialize() {
   const delayMix = audioContext.createGain();
   const delay = audioContext.createDelay(0.5);
   const feedback = audioContext.createGain();
-  const master = audioContext.createGain();
-  master.gain.value = 0.9;
+  masterNode = audioContext.createGain();
 
   const tremoloCarrier = audioContext.createGain();
   tremoloCarrier.gain.value = 1;
@@ -102,7 +191,6 @@ async function initialize() {
   tremoloOsc.type = 'sine';
 
   soundboardBus = audioContext.createGain();
-  soundboardBus.gain.value = 0.8;
 
   virtualMicDestination = audioContext.createMediaStreamDestination();
   window.voicemodOutputStream = virtualMicDestination.stream;
@@ -125,14 +213,12 @@ async function initialize() {
   delayMix.connect(tremoloCarrier);
   soundboardBus.connect(tremoloCarrier);
 
-  tremoloCarrier.connect(master);
-  master.connect(virtualMicDestination);
+  tremoloCarrier.connect(masterNode);
+  masterNode.connect(virtualMicDestination);
 
-  // Low-volume local monitor so users can hear effect without feedback loops.
-  const monitor = audioContext.createGain();
-  monitor.gain.value = 0.12;
-  master.connect(monitor);
-  monitor.connect(audioContext.destination);
+  monitorNode = audioContext.createGain();
+  masterNode.connect(monitorNode);
+  monitorNode.connect(audioContext.destination);
 
   tremoloConstant.connect(tremoloCarrier.gain);
   tremoloOsc.connect(tremoloDepth);
@@ -156,6 +242,7 @@ async function initialize() {
   };
 
   applyPreset('clean');
+  applySettingsToGraph();
 
   initialized = true;
   presetSelect.disabled = false;
@@ -245,14 +332,45 @@ function playApplause() {
   source.start();
 }
 
+function playUploadedBuffer(buffer) {
+  const source = audioContext.createBufferSource();
+  source.buffer = buffer;
+  source.connect(soundboardBus);
+  source.start();
+}
+
 function playSound(name) {
   if (!initialized) {
+    return;
+  }
+
+  const uploaded = uploadedBuffers[name];
+  if (uploaded) {
+    playUploadedBuffer(uploaded);
     return;
   }
 
   if (name === 'airhorn') playAirhorn();
   if (name === 'beep') playBeep();
   if (name === 'applause') playApplause();
+}
+
+async function handleUpload(name, file) {
+  if (!file) return;
+
+  if (!audioContext) {
+    setStatus('enable microphone before uploading soundboard files');
+    return;
+  }
+
+  try {
+    const bufferData = await file.arrayBuffer();
+    const decoded = await audioContext.decodeAudioData(bufferData.slice(0));
+    uploadedBuffers[name] = decoded;
+    setStatus(`uploaded sound for ${name}: ${file.name}`);
+  } catch {
+    setStatus(`failed to decode uploaded file for ${name}`);
+  }
 }
 
 startButton.addEventListener('click', async () => {
@@ -276,3 +394,19 @@ soundButtons.forEach((button) => {
     playSound(button.dataset.sound);
   });
 });
+
+Object.entries(uploadInputs).forEach(([name, input]) => {
+  input.addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    handleUpload(name, file);
+  });
+});
+
+Object.entries(settingsInputs).forEach(([key, input]) => {
+  input.addEventListener('input', (event) => {
+    updateSetting(key, event.target.value);
+  });
+});
+
+readStoredSettings();
+refreshSettingUI();
