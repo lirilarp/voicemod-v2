@@ -1,57 +1,98 @@
 # voicemod-v2
 
-A lightweight browser-based Voicemod-style prototype with:
+Voicemod-style client + deploy-ready Cloudflare Worker server.
 
+## Features
+
+### Client
 - Preset voice changers (`Clean`, `Radio`, `Demon`, `Robot`, `Cave`)
 - Soundboard buttons with real audio uploads (`Airhorn`, `Beep Beep`, `Applause`)
-- Settings for `Master gain`, `Monitor gain`, and `Soundboard gain`
-- Mixed output stream that combines your processed voice + soundboard audio
+- Runtime settings (`Master gain`, `Monitor gain`, `Soundboard gain`) persisted in local storage
+- Mixed output stream exposed as `window.voicemodOutputStream`
+
+### Server (Cloudflare Worker)
+- Account APIs (register, login, current user)
+- Token-authenticated uploads API
+- User settings + user presets APIs
+- Library summary endpoint
+- Uses Durable Objects storage and is configured in-repo (no extra service provisioning files required)
 
 ## Prerequisites
 
-- Node.js 18+ (for build command)
-- Python 3 (for local dev server command)
+- Node.js 18+
+- Python 3 (for client dev server)
+- Cloudflare account (for Worker deploy)
 
-## Run (dev)
-
-Because this uses microphone access, run it from a local web server (not `file://`).
+## Client Run (dev)
 
 ```bash
 cd /home/runner/work/voicemod-v2/voicemod-v2
 npm run dev
 ```
 
-Then open <http://localhost:8080> and:
-
-1. Click **Enable Microphone**.
-2. Pick a voice preset.
-3. (Optional) Upload real audio files for each soundboard button.
-4. Press soundboard buttons to inject sounds into the same output path.
-5. Adjust settings as needed; settings are persisted in browser local storage.
+Then open <http://localhost:8080>.
 
 ## Build
+
+Build both outputs:
 
 ```bash
 cd /home/runner/work/voicemod-v2/voicemod-v2
 npm run build
 ```
 
-This creates a deployable static bundle in:
+Artifacts:
+- Client static bundle: `/home/runner/work/voicemod-v2/voicemod-v2/dist`
+- Server source bundle: `/home/runner/work/voicemod-v2/voicemod-v2/dist-server`
 
-- `/home/runner/work/voicemod-v2/voicemod-v2/dist`
+## Cloudflare Worker server
 
-## Virtual mic output
+Server source lives in:
 
-The app exposes the processed stream at:
+- `/home/runner/work/voicemod-v2/voicemod-v2/worker/src/index.js`
+- `/home/runner/work/voicemod-v2/voicemod-v2/worker/wrangler.toml`
 
-```js
-window.voicemodOutputStream
+### Deploy (no extra repo setup required)
+
+```bash
+cd /home/runner/work/voicemod-v2/voicemod-v2/worker
+npm run deploy
 ```
 
-Use that stream where a microphone `MediaStream` is accepted (for example, WebRTC integrations).
+Optional recommended secret (for stronger token signing):
+
+```bash
+cd /home/runner/work/voicemod-v2/voicemod-v2/worker
+npx wrangler secret put AUTH_SECRET
+```
+
+### Local Worker dev
+
+```bash
+cd /home/runner/work/voicemod-v2/voicemod-v2/worker
+npm run dev
+```
+
+## Server API
+
+Base path: `/api`
+
+- `GET /health`
+- `POST /auth/register` body `{ "username": "...", "password": "..." }`
+- `POST /auth/login` body `{ "username": "...", "password": "..." }`
+- `GET /auth/me` (requires bearer authorization header)
+- `GET /uploads` (requires bearer authorization header)
+- `POST /uploads` multipart form-data with `file` and optional `slot` (requires bearer authorization header)
+- `GET /uploads/:uploadId` (requires bearer authorization header)
+- `DELETE /uploads/:uploadId` (requires bearer authorization header)
+- `GET /settings` (requires bearer authorization header)
+- `PUT /settings` body `{ "masterGain": number, "monitorGain": number, "soundboardGain": number }` (requires bearer authorization header)
+- `GET /presets` (requires bearer authorization header)
+- `PUT /presets` body `{ "presets": [...] }` (requires bearer authorization header)
+- `GET /library` (requires bearer authorization header)
 
 ## Notes
 
-- Works in modern Chromium/Firefox with Web Audio + `getUserMedia` support.
-- Uploaded soundboard files are decoded in-browser and are not sent to a server.
-- This is a browser clone/prototype, so device-level virtual-driver routing is not included.
+- Uploaded files are stored per-user in Worker Durable Object storage.
+- Upload limit is 10MB per file.
+- This remains a browser/client prototype for voice processing; OS-level virtual microphone drivers are not part of this repo.
