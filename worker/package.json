@@ -1,0 +1,11 @@
+{
+  "name": "voicemod-v2-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy",
+    "check": "node --check src/index.js"
+  }
+}

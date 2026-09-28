@@ -1,0 +1,12 @@
+name = "voicemod-v2-server"
+main = "src/index.js"
+compatibility_date = "2026-09-28"
+
+[durable_objects]
+bindings = [
+  { name = "APP_STATE", class_name = "AppState" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AppState"]
