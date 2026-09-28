@@ -25,10 +25,30 @@
 
       <section class="panel">
         <h2>Soundboard</h2>
+        <p class="small">Upload audio files for each sound button (mp3/wav/ogg).</p>
+        <div class="uploads">
+          <label>Airhorn file <input type="file" id="upload-airhorn" accept="audio/*" /></label>
+          <label>Beep file <input type="file" id="upload-beep" accept="audio/*" /></label>
+          <label>Applause file <input type="file" id="upload-applause" accept="audio/*" /></label>
+        </div>
         <div class="soundboard">
           <button data-sound="airhorn" disabled>Airhorn</button>
           <button data-sound="beep" disabled>Beep Beep</button>
           <button data-sound="applause" disabled>Applause</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Settings</h2>
+        <div class="settings-grid">
+          <label for="masterGain">Master gain <span id="masterGainValue">90%</span></label>
+          <input id="masterGain" type="range" min="0" max="150" value="90" />
+
+          <label for="monitorGain">Monitor gain <span id="monitorGainValue">12%</span></label>
+          <input id="monitorGain" type="range" min="0" max="60" value="12" />
+
+          <label for="soundboardGain">Soundboard gain <span id="soundboardGainValue">80%</span></label>
+          <input id="soundboardGain" type="range" min="0" max="150" value="80" />
         </div>
       </section>
 
