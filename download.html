@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voicemod V2 Downloads</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Voicemod V2 Downloads</h1>
+        <p class="subtitle">Build artifacts generated from the latest source.</p>
+      </div>
+      <nav class="nav-links">
+        <a href="./index.html">Studio</a>
+        <a class="active" href="./download.html">Downloads</a>
+      </nav>
+    </header>
+
+    <main class="layout">
+      <section class="panel panel-hero">
+        <p id="downloadVersion">Version: loading…</p>
+        <p id="downloadGeneratedAt" class="small">Generated: loading…</p>
+      </section>
+
+      <section class="panel">
+        <h2>Available Builds</h2>
+        <div id="downloadList" class="download-grid"></div>
+      </section>
+
+      <section class="panel">
+        <h2>How updates work</h2>
+        <p class="small">
+          Every build regenerates this page metadata from current source files. The Studio app checks
+          <code>/version.json</code> and can auto-reload when a newer version is published.
+        </p>
+      </section>
+    </main>
+
+    <script type="module" src="./download.js"></script>
+  </body>
+</html>

@@ -1,17 +1,31 @@
+import { APP_VERSION } from './app-version.js';
+
 const startButton = document.getElementById('startButton');
+const stopAllButton = document.getElementById('stopAllButton');
 const presetSelect = document.getElementById('presetSelect');
 const soundButtons = Array.from(document.querySelectorAll('[data-sound]'));
 const statusLabel = document.getElementById('status');
+const uploadSummary = document.getElementById('uploadSummary');
+const appVersionLabel = document.getElementById('appVersionLabel');
+const latestVersionLabel = document.getElementById('latestVersionLabel');
+const updateBanner = document.getElementById('updateBanner');
+const updateVersionText = document.getElementById('updateVersionText');
+const reloadNowButton = document.getElementById('reloadNowButton');
+const checkUpdateButton = document.getElementById('checkUpdateButton');
+
 const uploadInputs = {
   airhorn: document.getElementById('upload-airhorn'),
   beep: document.getElementById('upload-beep'),
   applause: document.getElementById('upload-applause'),
 };
+
 const settingsInputs = {
   masterGain: document.getElementById('masterGain'),
   monitorGain: document.getElementById('monitorGain'),
   soundboardGain: document.getElementById('soundboardGain'),
+  autoUpdateEnabled: document.getElementById('autoUpdateEnabled'),
 };
+
 const settingsValues = {
   masterGain: document.getElementById('masterGainValue'),
   monitorGain: document.getElementById('monitorGainValue'),
@@ -25,12 +39,17 @@ let virtualMicDestination;
 let nodes;
 let masterNode;
 let monitorNode;
+let isReloading = false;
 
+const activeSources = new Set();
 const settingsStorageKey = 'voicemod-v2-settings';
+const updateCheckIntervalMs = 60_000;
+
 const defaultSettings = {
   masterGain: 0.9,
   monitorGain: 0.12,
   soundboardGain: 0.8,
+  autoUpdateEnabled: true,
 };
 
 const settings = {
@@ -38,6 +57,12 @@ const settings = {
 };
 
 const uploadedBuffers = {
+  airhorn: null,
+  beep: null,
+  applause: null,
+};
+
+const uploadedFileNames = {
   airhorn: null,
   beep: null,
   applause: null,
@@ -67,6 +92,7 @@ function readStoredSettings() {
     if (typeof parsed.masterGain === 'number') settings.masterGain = clamp(parsed.masterGain, 0, 1.5);
     if (typeof parsed.monitorGain === 'number') settings.monitorGain = clamp(parsed.monitorGain, 0, 0.6);
     if (typeof parsed.soundboardGain === 'number') settings.soundboardGain = clamp(parsed.soundboardGain, 0, 1.5);
+    if (typeof parsed.autoUpdateEnabled === 'boolean') settings.autoUpdateEnabled = parsed.autoUpdateEnabled;
   } catch {
     localStorage.removeItem(settingsStorageKey);
   }
@@ -80,6 +106,7 @@ function refreshSettingUI() {
   settingsInputs.masterGain.value = String(Math.round(settings.masterGain * 100));
   settingsInputs.monitorGain.value = String(Math.round(settings.monitorGain * 100));
   settingsInputs.soundboardGain.value = String(Math.round(settings.soundboardGain * 100));
+  settingsInputs.autoUpdateEnabled.checked = settings.autoUpdateEnabled;
 
   settingsValues.masterGain.textContent = `${Math.round(settings.masterGain * 100)}%`;
   settingsValues.monitorGain.textContent = `${Math.round(settings.monitorGain * 100)}%`;
@@ -87,6 +114,7 @@ function refreshSettingUI() {
 }
 
 function applySettingsToGraph() {
+  if (!audioContext) return;
   if (masterNode) {
     masterNode.gain.setTargetAtTime(settings.masterGain, audioContext.currentTime, 0.02);
   }
@@ -99,16 +127,47 @@ function applySettingsToGraph() {
 }
 
 function updateSetting(key, rawValue) {
-  const asNumber = Number(rawValue);
-  if (Number.isNaN(asNumber)) return;
-
-  if (key === 'masterGain') settings.masterGain = clamp(asNumber / 100, 0, 1.5);
-  if (key === 'monitorGain') settings.monitorGain = clamp(asNumber / 100, 0, 0.6);
-  if (key === 'soundboardGain') settings.soundboardGain = clamp(asNumber / 100, 0, 1.5);
+  if (key === 'autoUpdateEnabled') {
+    settings.autoUpdateEnabled = Boolean(rawValue);
+    if (settings.autoUpdateEnabled) {
+      hideUpdateBanner();
+    }
+  } else {
+    const asNumber = Number(rawValue);
+    if (Number.isNaN(asNumber)) return;
+    if (key === 'masterGain') settings.masterGain = clamp(asNumber / 100, 0, 1.5);
+    if (key === 'monitorGain') settings.monitorGain = clamp(asNumber / 100, 0, 0.6);
+    if (key === 'soundboardGain') settings.soundboardGain = clamp(asNumber / 100, 0, 1.5);
+  }
 
   refreshSettingUI();
   writeSettings();
   if (initialized) applySettingsToGraph();
+}
+
+function updateUploadSummary() {
+  const entries = Object.entries(uploadedFileNames)
+    .filter(([, value]) => value)
+    .map(([slot, value]) => `${slot}: ${value}`);
+  uploadSummary.textContent = entries.length ? `Uploaded: ${entries.join(' • ')}` : 'Uploaded: none';
+}
+
+function registerSource(source) {
+  activeSources.add(source);
+  source.onended = () => activeSources.delete(source);
+  return source;
+}
+
+function stopAllSounds() {
+  for (const source of Array.from(activeSources)) {
+    try {
+      source.stop(0);
+    } catch {
+      // no-op
+    }
+    activeSources.delete(source);
+  }
+  setStatus('all currently playing sounds stopped');
 }
 
 function makeDistortionCurve(amount) {
@@ -245,6 +304,7 @@ async function initialize() {
   applySettingsToGraph();
 
   initialized = true;
+  stopAllButton.disabled = false;
   presetSelect.disabled = false;
   soundButtons.forEach((button) => {
     button.disabled = false;
@@ -262,7 +322,7 @@ function addEnvelope(node, attack, release, total) {
 }
 
 function playAirhorn() {
-  const osc = audioContext.createOscillator();
+  const osc = registerSource(audioContext.createOscillator());
   const gain = audioContext.createGain();
   const filter = audioContext.createBiquadFilter();
 
@@ -285,7 +345,7 @@ function playAirhorn() {
 }
 
 function playBeep() {
-  const osc = audioContext.createOscillator();
+  const osc = registerSource(audioContext.createOscillator());
   const gain = audioContext.createGain();
   osc.type = 'square';
 
@@ -314,7 +374,7 @@ function playApplause() {
     data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
   }
 
-  const source = audioContext.createBufferSource();
+  const source = registerSource(audioContext.createBufferSource());
   const gain = audioContext.createGain();
   const filter = audioContext.createBiquadFilter();
 
@@ -333,7 +393,7 @@ function playApplause() {
 }
 
 function playUploadedBuffer(buffer) {
-  const source = audioContext.createBufferSource();
+  const source = registerSource(audioContext.createBufferSource());
   source.buffer = buffer;
   source.connect(soundboardBus);
   source.start();
@@ -367,9 +427,62 @@ async function handleUpload(name, file) {
     const bufferData = await file.arrayBuffer();
     const decoded = await audioContext.decodeAudioData(bufferData.slice(0));
     uploadedBuffers[name] = decoded;
+    uploadedFileNames[name] = file.name;
+    updateUploadSummary();
     setStatus(`uploaded sound for ${name}: ${file.name}`);
   } catch {
     setStatus(`failed to decode uploaded file for ${name}`);
+  }
+}
+
+function hideUpdateBanner() {
+  updateBanner.classList.add('hidden');
+}
+
+function showUpdateBanner(version) {
+  updateVersionText.textContent = version ? `Latest: ${version}` : '';
+  updateBanner.classList.remove('hidden');
+}
+
+function refreshVersionBadges(current, latest) {
+  appVersionLabel.textContent = `Version: ${current}`;
+  latestVersionLabel.textContent = `Latest: ${latest || 'unknown'}`;
+}
+
+async function fetchVersionMeta() {
+  const response = await fetch(`./version.json?t=${Date.now()}`, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error('version metadata unavailable');
+  }
+  return response.json();
+}
+
+async function checkForUpdates({ manual = false } = {}) {
+  try {
+    const meta = await fetchVersionMeta();
+    const latest = typeof meta?.version === 'string' ? meta.version : null;
+    refreshVersionBadges(APP_VERSION, latest);
+
+    if (!latest || latest === APP_VERSION) {
+      hideUpdateBanner();
+      if (manual) setStatus('no new updates found');
+      return;
+    }
+
+    if (settings.autoUpdateEnabled) {
+      if (!isReloading) {
+        isReloading = true;
+        setStatus(`new version detected (${latest}), reloading...`);
+        setTimeout(() => window.location.reload(), 700);
+      }
+      return;
+    }
+
+    showUpdateBanner(latest);
+    if (manual) setStatus(`update available: ${latest}`);
+  } catch {
+    refreshVersionBadges(APP_VERSION, null);
+    if (manual) setStatus('unable to check for updates right now');
   }
 }
 
@@ -383,6 +496,16 @@ startButton.addEventListener('click', async () => {
     startButton.disabled = false;
     setStatus(`microphone access failed (${error.message})`);
   }
+});
+
+stopAllButton.addEventListener('click', stopAllSounds);
+
+reloadNowButton.addEventListener('click', () => {
+  window.location.reload();
+});
+
+checkUpdateButton.addEventListener('click', () => {
+  checkForUpdates({ manual: true });
 });
 
 presetSelect.addEventListener('change', (event) => {
@@ -402,11 +525,27 @@ Object.entries(uploadInputs).forEach(([name, input]) => {
   });
 });
 
-Object.entries(settingsInputs).forEach(([key, input]) => {
-  input.addEventListener('input', (event) => {
-    updateSetting(key, event.target.value);
-  });
+settingsInputs.masterGain.addEventListener('input', (event) => updateSetting('masterGain', event.target.value));
+settingsInputs.monitorGain.addEventListener('input', (event) => updateSetting('monitorGain', event.target.value));
+settingsInputs.soundboardGain.addEventListener('input', (event) => updateSetting('soundboardGain', event.target.value));
+settingsInputs.autoUpdateEnabled.addEventListener('change', (event) => {
+  updateSetting('autoUpdateEnabled', event.target.checked);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+  if (event.key === '1') playSound('airhorn');
+  if (event.key === '2') playSound('beep');
+  if (event.key === '3') playSound('applause');
+  if (event.key.toLowerCase() === 'x') stopAllSounds();
 });
 
 readStoredSettings();
 refreshSettingUI();
+updateUploadSummary();
+refreshVersionBadges(APP_VERSION, null);
+
+checkForUpdates();
+setInterval(() => {
+  checkForUpdates();
+}, updateCheckIntervalMs);
